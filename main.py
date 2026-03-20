@@ -1,12 +1,9 @@
 import discord
 import os
-from openai import OpenAI
+import requests
 
-# โหลด Token จาก Railway
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-client_ai = OpenAI(api_key=OPENAI_API_KEY)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -28,14 +25,23 @@ async def on_message(message):
         await message.channel.send("🤖 กำลังคิด...")
 
         try:
-            response = client_ai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "user", "content": user_text}
-                ]
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "openrouter/free",
+                    "messages": [
+                        {"role": "user", "content": user_text}
+                    ]
+                }
             )
 
-            reply = response.choices[0].message.content
+            data = response.json()
+            reply = data["choices"][0]["message"]["content"]
+
             await message.channel.send(reply)
 
         except Exception as e:
