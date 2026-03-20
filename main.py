@@ -1,16 +1,21 @@
 import discord
 import os
 import requests
+import time
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-ALLOWED_CHANNEL_ID = 1404440344254353460  # ใส่ ID ห้อง
+ALLOWED_CHANNEL_ID = 1404440344254353460
 
-# 👉 กำหนดความจำ (ยิ่งมากยิ่งจำเยอะ)
-MAX_MEMORY = 100
+# 🔥 แนะนำ 10-15 พอ
+MAX_MEMORY = 12
 
-# 👉 เก็บ memory แยกแต่ละ user
+# ⏱️ กันยิงรัว
+COOLDOWN = 3
+last_used = 0
+
+# 🧠 memory
 user_memory = {}
 
 intents = discord.Intents.default()
@@ -24,26 +29,37 @@ async def on_ready():
 
 @client.event
 async def on_message(message):
+    global last_used
+
     if message.author == client.user:
         return
 
     if message.channel.id != ALLOWED_CHANNEL_ID:
         return
 
-    user_id = str(message.author.id)
-    user_text = message.content
+    # ❌ กันข้อความสั้น / spam
+    if len(message.content.strip()) < 2:
+        return
 
-    # 👉 ถ้ายังไม่มี memory ให้สร้าง
+    # ⏱️ cooldown กันโดน rate limit
+    now = time.time()
+    if now - last_used < COOLDOWN:
+        return
+    last_used = now
+
+    user_id = str(message.author.id)
+    user_text = message.content[:300]  # ตัดข้อความยาวเกิน
+
     if user_id not in user_memory:
         user_memory[user_id] = []
 
-    # 👉 เพิ่มข้อความ user
+    # ➕ เพิ่มข้อความ user
     user_memory[user_id].append({
         "role": "user",
         "content": user_text
     })
 
-    # 👉 จำกัด memory
+    # ✂️ จำกัด memory
     user_memory[user_id] = user_memory[user_id][-MAX_MEMORY:]
 
     try:
@@ -58,16 +74,23 @@ async def on_message(message):
                 "messages": [
                     {
                         "role": "system",
-                        "content": "คุณเป็นบอทกวนๆ ฉลาดๆ ตอบมั่นใจ เป็นผู้หญิง ขี้อาย อ่อนหวาน นิสัยดี"
+                        "content": "คุณเป็นบอทผู้หญิง น่ารัก ขี้อาย อ่อนหวาน แต่แอบกวนเล็กน้อย ตอบสั้น กระชับ เป็นธรรมชาติ"
                     }
                 ] + user_memory[user_id]
-            }
+            },
+            timeout=10  # 🔥 กันค้าง
         )
 
         data = response.json()
+
+        # ❌ เช็ค error จาก API
+        if "choices" not in data:
+            await message.channel.send("❌ API error")
+            return
+
         reply = data["choices"][0]["message"]["content"]
 
-        # 👉 เก็บคำตอบบอทด้วย
+        # ➕ เก็บคำตอบบอท
         user_memory[user_id].append({
             "role": "assistant",
             "content": reply
